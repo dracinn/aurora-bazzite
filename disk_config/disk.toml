@@ -1,0 +1,7 @@
+# Disk image configuration for bootc-image-builder.
+# The produced qcow2/raw disk boots under any arm64 UEFI virtual machine
+# (QEMU, UTM, Tart, GNOME Boxes). See the README for the bare-metal caveat.
+
+[[customizations.filesystem]]
+mountpoint = "/"
+minsize = "20 GiB"

@@ -1,0 +1,13 @@
+# Kernel arguments applied by bootc at deployment and upgrade time.
+#
+# Mirrors the command line used by Aurora's image builds (see the images
+# README in aurora-silicon/fedora-aurora): user4k=on enables per-process 4K
+# userspace pages on the 16K kernel, which FEX and the native Steam client
+# require; the rest keep the boot quiet.
+kargs = [
+    "user4k=on",
+    "quiet",
+    "loglevel=3",
+    "rd.udev.log_level=3",
+    "systemd.show_status=auto",
+]
