@@ -378,7 +378,7 @@ _build-bib $target_image $tag $type $config: _ensure-machine (_rootful_load_imag
         # path - podman machine shares $HOME by default; other locations
         # need `podman machine init -v <path>:<path>` (or
         # `podman machine set --volume <path>:<path>` and a restart).
-        if ! podman machine ssh -- test -d "${PWD}"; then
+        if ! podman machine ssh -- "test -d '${PWD}'"; then
             echo "The podman machine cannot see ${PWD}." >&2
             echo "Recreate it with: podman machine init --rootful -v \"${PWD}:${PWD}\"" >&2
             exit 1
@@ -391,8 +391,8 @@ _build-bib $target_image $tag $type $config: _ensure-machine (_rootful_load_imag
           --pull=newer \
           --net=host \
           --security-opt label=type:unconfined_t \
-          -v "${PWD}/{{ config }}:/config.toml:ro" \
-          -v "${PWD}/output:/output" \
+          -v "'${PWD}/{{ config }}:/config.toml:ro'" \
+          -v "'${PWD}/output:/output'" \
           -v /var/lib/containers/storage:/var/lib/containers/storage \
           "${bib_image}" \
           ${args} \
