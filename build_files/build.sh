@@ -115,6 +115,15 @@ for module_dir in /usr/lib/modules/*/; do
     fi
 done
 
+### authselect vendor profile
+# aurora-sep ships /usr/share/authselect/vendor/local populated but without its
+# .aurora-sep marker, so authselect-vendor-local refuses to touch it and the
+# unguarded default system-auth template survives — with-fingerprint would then
+# offer Touch ID to login/su/su-l. Remove the stale dir and let the script
+# rebuild the guarded vendor profile.
+rm -rf /usr/share/authselect/vendor/local
+/usr/libexec/aurora/authselect-vendor-local
+
 ### Enable a System Unit File
 # Aurora's packages ship their own systemd presets (e.g.
 # 90-aurora-peripherals.preset); bootc applies presets on deployment.

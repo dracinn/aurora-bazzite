@@ -464,6 +464,19 @@ bundle $target_image=("localhost/" + image_name) $tag=default_tag profile="fedor
         /work/output/image/disk.raw "{{ profile }}" /work/output/bundle
     echo "Installer bundle written to output/bundle/"
 
+# Run Aurora's basics qualification against output/bundle
+[group('Build Disk Image')]
+check-bundle $target_image=("localhost/" + image_name) $tag=default_tag profile="minimal":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ -f output/bundle/image.json ]] || just bundle "{{ target_image }}" "{{ tag }}" "fedora-{{ profile }}"
+    repo="{{ justfile_directory() }}"
+    podman machine ssh sudo podman run --rm --privileged \
+        -v /dev:/dev \
+        -v "'${repo}:/work'" --security-opt label=disable \
+        "{{ target_image }}:{{ tag }}" \
+        /work/scripts/check-bundle.sh /work/output/bundle "{{ profile }}"
+
 # Assemble the installer payload zip + metadata (output/payload)
 [group('Build Disk Image')]
 payload $target_image=("localhost/" + image_name) $tag=default_tag profile="fedora-minimal":

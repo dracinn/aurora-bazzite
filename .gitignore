@@ -5,3 +5,5 @@ _build-*/**
 *_chunkah_*
 *_rpm-ostree_*
 .aurora-installer
+*.pyc
+__pycache__/

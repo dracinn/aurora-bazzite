@@ -37,9 +37,13 @@ if [ -z "$aurora_disk" ]; then regexp --set=1:aurora_disk '^([^,]+),' "$aurora_e
 """
 PARTITIONS = " ".join(str(number) for number in range(1, 33))
 UUID = r"[0-9A-Fa-f][0-9A-Fa-f-]{3,}"
-SEARCH = re.compile(rf"^(?P<indent>[ \t]*)search\b(?=[^\n]*--fs-uuid)(?P<args>[^\n]*?)\s(?P<uuid>{UUID})[ \t]*$",
+SEARCH = re.compile(rf"^(?P<indent>[ \t]*)search\b(?=[^\n]*--fs-uuid)(?P<args>[^\n]*?)\s"
+                    rf'["\']?(?P<uuid>{UUID}|\$\{{?\w+\}}?)["\']?(?P<trailing>[^\n]*?)[ \t]*$',
                     re.MULTILINE)
 VARIABLE = re.compile(r"--set(?:=|\s+)(\w+)")
+# Any other lookup (e.g. `--label` in BIB's grub.cfg) still gets the hint so
+# GRUB never falls back to probing every filesystem on every disk.
+GENERIC = re.compile(r"^(?P<indent>[ \t]*)search\b(?P<rest>[^\n]*?)[ \t]*$", re.MULTILINE)
 
 
 def marker_name(boot_uuid):
@@ -99,7 +103,7 @@ def harden_main(text, efi_uuid):
 
     def replace(match):
         nonlocal count
-        found = VARIABLE.search(match["args"])
+        found = VARIABLE.search(match["args"] + match["trailing"])
         if not found:
             return match[0]
         variable, uuid, indent = found[1], match["uuid"], match["indent"]
@@ -112,6 +116,15 @@ def harden_main(text, efi_uuid):
         return lookup(indent, variable, uuid)
 
     text = SEARCH.sub(replace, text)
+
+    def hint(match):
+        if "--hint" in match[0]:
+            return match[0]
+        nonlocal count
+        count += 1
+        return f'{match["indent"]}search{match["rest"]} --hint="${{aurora_disk}},"'
+
+    text = GENERIC.sub(hint, text)
     return PREAMBLE + text if count else text
 
 
