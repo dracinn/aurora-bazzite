@@ -5,8 +5,9 @@ set -ouex pipefail
 # Copy the contents of system_files/ of the git repo to /
 #
 # This installs:
-#   - /etc/yum.repos.d/aurora.repo + aurora-override.repo
-#     (the Aurora Silicon RPM repository, testing channel)
+#   - /etc/yum.repos.d/aurora.repo
+#     (the Aurora Silicon RPM repository, testing channel, with the
+#      aurora-override.repo options merged in)
 #   - /etc/pki/rpm-gpg/RPM-GPG-KEY-aurora
 #     (repo signing key; fingerprint D6C974933C41AACE00AE3C4591B639B8C6A77AC1,
 #      recorded in aurora-silicon/fedora-aurora keys/fingerprint.txt)
@@ -25,14 +26,29 @@ for pkg in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-
     fi
 done
 
+# kernel-aurora's %posttrans runs `kernel-install add`, and the
+# 05-rpmostree.install hook calls dracut before depmod has produced
+# modules.dep, failing the whole transaction in a container. Mask just
+# that hook for the duration of the install (/etc/kernel/install.d takes
+# precedence over /usr/lib/kernel/install.d); the initramfs loop further
+# down generates the initramfs correctly, and the mask is removed before
+# the image is committed so deployed systems keep the hook.
+mkdir -p /etc/kernel/install.d
+ln -s /dev/null /etc/kernel/install.d/05-rpmostree.install
+
 dnf5 install -y \
     kernel-aurora \
     kernel-aurora-modules-extra
 
+rm -f /etc/kernel/install.d/05-rpmostree.install
+rmdir /etc/kernel/install.d 2>/dev/null || true
+
 ### Aurora Silicon hardware stack
 # Package names verified against the live repository:
 # https://aurorasilicon.org/fedora-aurora/44/testing/aarch64/repodata/
-dnf5 install -y \
+# --allowerasing lets Aurora's forks replace stock Fedora packages that
+# conflict (e.g. mesa, upower).
+dnf5 install -y --allowerasing \
     aurora-platform \
     aurora-firmware \
     aurora-wifi-firmware \
@@ -85,15 +101,16 @@ dnf5 install -y tmux
 # Disable COPRs so they don't end up enabled on the final image:
 # dnf5 -y copr disable ublue-os/staging
 
-### Initramfs fallback
-# kernel-aurora normally builds its initramfs via kernel-install during the
-# package transaction. If a module directory ends up without one, generate it
-# so `bootc container lint` passes.
+### Initramfs
+# The kernel's initramfs was skipped during the transaction (see the
+# 05-rpmostree.install mask above), so generate it here with the ostree
+# module bootc needs. depmod runs first to be safe.
 for module_dir in /usr/lib/modules/*/; do
     kver="$(basename "${module_dir}")"
     if [[ -f "${module_dir}/vmlinuz" && ! -f "${module_dir}/initramfs.img" ]]; then
+        depmod -a "${kver}"
         DRACUT_NO_XATTR=1 dracut --no-hostonly --kver "${kver}" --reproducible \
-            -f "${module_dir}/initramfs.img"
+            --add ostree -f "${module_dir}/initramfs.img"
         chmod 0600 "${module_dir}/initramfs.img"
     fi
 done

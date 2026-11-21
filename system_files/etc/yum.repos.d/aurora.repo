@@ -8,3 +8,8 @@ priority=1
 # Fail rather than skip: a release with no Aurora repository must stop an
 # upgrade instead of installing it without Aurora's packages.
 skip_if_unavailable=False
+# Merged from aurora-override.repo (fedora-aurora/packages/aurora-repos):
+# a separate file shadows the whole [aurora] section in this dnf5 version,
+# so the options are kept inline here.
+repo_gpgcheck=0
+auto_import_local_keys=1

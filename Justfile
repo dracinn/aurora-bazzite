@@ -92,7 +92,8 @@ _ensure-machine:
     fi
     if ! podman machine inspect &>/dev/null; then
         echo "Creating rootful podman machine..."
-        podman machine init --rootful --cpus 4 --memory 8192 --disk-size 60
+        podman machine init --rootful --cpus 4 --memory 8192 --disk-size 60 \
+            -v "${PWD}:${PWD}"
     elif ! podman machine inspect --format '{{ '{{.Rootful}}' }}' | grep -q true; then
         echo "podman machine exists but is rootless; converting to rootful (required for disk images)..."
         podman machine stop || true
@@ -373,11 +374,15 @@ _build-bib $target_image $tag $type $config: _ensure-machine (_rootful_load_imag
 
     if [[ "$(uname)" == "Darwin" ]]; then
         # Copy the image into the machine's rootful store, then run BIB
-        # there. podman machine shares $HOME into the VM at the same path.
-        case "${PWD}" in
-            "${HOME}"*) ;;
-            *) echo "On macOS, clone this repository under ${HOME} so the podman machine can see it." >&2; exit 1 ;;
-        esac
+        # there. The repo must be visible inside the machine at the same
+        # path - podman machine shares $HOME by default; other locations
+        # need `podman machine init -v <path>:<path>` (or
+        # `podman machine set --volume <path>:<path>` and a restart).
+        if ! podman machine ssh -- test -d "${PWD}"; then
+            echo "The podman machine cannot see ${PWD}." >&2
+            echo "Recreate it with: podman machine init --rootful -v \"${PWD}:${PWD}\"" >&2
+            exit 1
+        fi
         podman save "${target_image}:${tag}" | podman machine ssh sudo podman load
         mkdir -p output
         podman machine ssh sudo podman run \
