@@ -18,7 +18,7 @@ recovery_tests=${AURORA_RECOVERY_TESTS:-true}
 
 # Build-time tooling only; the installer app itself is Swift and untouched.
 if [[ ! -f $repo/macOS/scripts/assemble-distribution-payload.py ]]; then
-  git clone --depth 1 https://github.com/aurora-silicon/aurora-installer "$repo"
+  git clone --depth 1 "${AURORA_INSTALLER_REPO:-https://github.com/dracinn/aurora-installer}" "$repo"
 fi
 # The C authorization fixture aborts under assertion on newer macOS; allow a
 # build to skip the pure test fixtures without editing upstream source.
