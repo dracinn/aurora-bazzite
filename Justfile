@@ -464,6 +464,15 @@ bundle $target_image=("localhost/" + image_name) $tag=default_tag profile="fedor
         /work/output/image/disk.raw "{{ profile }}" /work/output/bundle
     echo "Installer bundle written to output/bundle/"
 
+# Assemble the installer payload zip + metadata (output/payload)
+[group('Build Disk Image')]
+payload $target_image=("localhost/" + image_name) $tag=default_tag profile="fedora-minimal":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ -f output/bundle/image.json ]] || just bundle "{{ target_image }}" "{{ tag }}" "{{ profile }}"
+    ./scripts/assemble-payload.sh output/bundle output/payload
+    echo "Installer payload written to output/payload/"
+
 # Runs shell check on all Bash scripts
 lint:
     #!/usr/bin/env bash

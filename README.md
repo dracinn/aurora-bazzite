@@ -114,7 +114,17 @@ filesystem bundle expects.
 just bundle                 # → output/bundle/: image.json, boot.img, root.img,
                             #   esp/, stage2.json (default profile fedora-minimal)
 just bundle "" "" fedora-kde   # choose the installer's profile name
+just payload                # → output/payload/: <profile>-<date>.zip,
+                            #   installer-data-<profile>.json, delivery.json
 ```
+
+`payload` clones `aurora-installer` into `.aurora-installer/` (build-time
+tooling only), builds the native Recovery app template via SwiftPM with an
+ad-hoc signature, and runs `assemble-distribution-payload.py`, which
+digest-validates the bundle — every required board Stage 2, the Mach-O
+Stage 1, image checksums, and the Recovery app's Info.plist markers and
+inventory — before writing the zip. `AURORA_RECOVERY_TESTS=` can be set to
+re-enable the Recovery test fixtures, which crash on newer macOS.
 
 `bundle` runs `installer/finalize-image` (vendored from
 [aurora-silicon/aurora-platform](https://github.com/aurora-silicon/aurora-platform),
