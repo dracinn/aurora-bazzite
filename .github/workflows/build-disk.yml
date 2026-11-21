@@ -21,7 +21,6 @@ on:
       - main
     paths:
       - './disk_config/disk.toml'
-      - './disk_config/iso.toml'
       - './.github/workflows/build-disk.yml'
 
 env:
@@ -40,10 +39,10 @@ jobs:
     runs-on: ${{ inputs.platform == 'amd64' && 'ubuntu-26.04' || 'ubuntu-26.04-arm' }}
     strategy:
       fail-fast: false
-      # qcow2 and raw disk images for the installer path / physical
-      # installs. Add "anaconda-iso" if you need an installer ISO for
-      # other arm64 UEFI systems; on Apple Silicon the bootchain
-      # (m1n1/Aura -> U-Boot) is written by the native installer.
+      # Disk images for the Aurora installer path: raw is the artifact
+      # the installer consumes; on Apple Silicon the bootchain
+      # (m1n1/Aura -> U-Boot) is written by the native installer, not by
+      # an ISO, so no anaconda-iso target is built.
       matrix:
         disk-type: ["qcow2", "raw"]
     permissions:
@@ -87,7 +86,7 @@ jobs:
         uses: osbuild/bootc-image-builder-action@8661cd3832544ad68c12dcde8681b13ab0f56a8d # main
         with:
           builder-image: ${{ env.BIB_IMAGE }}
-          config-file: ${{ matrix.disk-type == 'anaconda-iso' && './disk_config/iso.toml' || './disk_config/disk.toml' }}
+          config-file: './disk_config/disk.toml'
           image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
           chown: ${{ env.USER_UID }}:${{ env.USER_GID }}
           types: ${{ matrix.disk-type }}

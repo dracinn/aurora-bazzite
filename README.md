@@ -164,7 +164,7 @@ The [build.yml](./.github/workflows/build.yml) workflow builds the image on a na
 
 # Building Disk Images
 
-[build-disk.yml](./.github/workflows/build-disk.yml) runs `bootc-image-builder` on the arm64 runner and produces `qcow2` and `raw` disk images — bootable in any arm64 UEFI VM. `disk_config/iso.toml` is provided for an Anaconda installer ISO (VM installs); point its `bootc switch` kickstart at your published image first.
+[build-disk.yml](./.github/workflows/build-disk.yml) runs `bootc-image-builder` on the arm64 runner and produces `qcow2` and `raw` disk images for the installer path. No ISO is built: on Apple Silicon the install goes through the native Aurora installer, not Anaconda.
 
 Disk images upload to a job artifact, or to S3 via rclone with these repository secrets: `S3_PROVIDER`, `S3_BUCKET_NAME`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_ENDPOINT`. See [rclone's provider list](https://rclone.org/s3/).
 
@@ -229,17 +229,16 @@ sudo bootc switch --transport containers-storage localhost/aurora-bazzite:latest
 
 See [man bootc switch](https://bootc.dev/bootc/man/bootc-switch.8.html).
 
-## Building Disk Images and ISOs
+## Building Disk Images
 
-Available types: `qcow2`, `raw`, `iso`.
+Available types: `qcow2`, `raw`.
 
-### `just build-raw` / `just build-qcow2` / `just build-iso`
+### `just build-raw` / `just build-qcow2` (alias `just build-disk`)
 
 Runs bootc-image-builder inside the rootful podman machine on macOS (or
 rootful podman on Linux) and leaves the result in `output/<type>/`.
 `rebuild-*` variants rebuild the container image first. `raw` is the
-format to hand to the installer pipeline; `iso` produces an Anaconda
-installer ISO (useful for non-Apple-Silicon arm64 systems).
+artifact the Aurora installer consumes.
 
 ## File Management
 

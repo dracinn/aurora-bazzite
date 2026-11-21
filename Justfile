@@ -9,8 +9,8 @@ export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_tag := env_var("DEFAULT_TAG")
 export bib_image := env_var("BIB_IMAGE")
 
-alias build-disk := build-qcow2
-alias rebuild-disk := rebuild-qcow2
+alias build-disk := build-raw
+alias rebuild-disk := rebuild-raw
 
 [private]
 default:
@@ -434,13 +434,9 @@ _rebuild-bib $target_image $tag $type $config: (build target_image tag) && (_bui
 [group('Build Disk Image')]
 build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "qcow2" "disk_config/disk.toml")
 
-# Build a RAW disk image (the artifact an Apple Silicon install consumes)
+# Build a RAW disk image (the artifact the Aurora installer consumes)
 [group('Build Disk Image')]
 build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "raw" "disk_config/disk.toml")
-
-# Build an ISO installer image
-[group('Build Disk Image')]
-build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "iso" "disk_config/iso.toml")
 
 # Rebuild a QCOW2 disk image
 [group('Build Disk Image')]
@@ -449,10 +445,6 @@ rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_r
 # Rebuild a RAW disk image
 [group('Build Disk Image')]
 rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "disk_config/disk.toml")
-
-# Rebuild an ISO installer image
-[group('Build Disk Image')]
-rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "iso" "disk_config/iso.toml")
 
 # Runs shell check on all Bash scripts
 lint:
