@@ -40,10 +40,10 @@ jobs:
     runs-on: ${{ inputs.platform == 'amd64' && 'ubuntu-26.04' || 'ubuntu-26.04-arm' }}
     strategy:
       fail-fast: false
-      # qcow2 and raw boot in arm64 VMs (QEMU, UTM, Tart, GNOME Boxes).
-      # Add "anaconda-iso" back if you need an installer ISO for VM installs;
-      # these images do NOT boot on Apple Silicon bare metal - that path is
-      # aurora-installer + the KIWI images in aurora-silicon/fedora-aurora.
+      # qcow2 and raw disk images for the installer path / physical
+      # installs. Add "anaconda-iso" if you need an installer ISO for
+      # other arm64 UEFI systems; on Apple Silicon the bootchain
+      # (m1n1/Aura -> U-Boot) is written by the native installer.
       matrix:
         disk-type: ["qcow2", "raw"]
     permissions:

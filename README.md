@@ -19,7 +19,6 @@ The image is `linux/arm64` only. It starts from `quay.io/fedora/fedora-bootc:44`
 
   ```bash
   brew install podman just jq cosign
-  brew install qemu   # optional, for `just run-vm-*`
   podman machine init --rootful --cpus 4 --memory 8192 --disk-size 60
   podman machine start
   ```
@@ -99,20 +98,30 @@ Once pushed, go look at the Actions tab on your Github repository's page. The gr
 
 ## Step 3: Switch to Your Image
 
-### Virtual machines (recommended for testing)
+### Disk images for the installer path
 
 ```bash
-just build          # podman build, linux/arm64
-just build-qcow2    # bootc-image-builder inside the (rootful) podman machine
-just run-vm-qcow2   # qemu-system-aarch64 + Hypervisor.framework on macOS
+just build          # podman build, linux/arm64 OCI image
+just build-raw      # raw disk image via bootc-image-builder, in output/raw/disk.raw
+just build-qcow2    # same pipeline, qcow2 output
 ```
 
-SSH is forwarded to `localhost:2222`. qcow2/raw disks also boot in UTM, Tart or GNOME Boxes.
+`build-raw` produces `output/raw/disk.raw` with the standard layout (ESP +
+ext4 `/boot` + btrfs root). That is the artifact an Apple Silicon install
+consumes: write it with the installer, which supplies the m1n1/Aura →
+U-Boot bootchain on the ESP. The image itself ships `update-m1n1`,
+`uboot-aurora` and `aura` so Stage 2 and the DTBs stay maintained on the
+installed system.
 
 ### Bare metal: use the Aurora installer
 
 > [!IMPORTANT]
-> The disk images produced here use a standard UEFI bootchain. Apple Silicon Macs boot through m1n1/Aura → U-Boot → GRUB, which this template's output does **not** provide. For a physical install of stock Aurora, use the native macOS app at [aurora-silicon/aurora-installer](https://github.com/aurora-silicon/aurora-installer) with the KIWI images from [aurora-silicon/fedora-aurora](https://github.com/aurora-silicon/fedora-aurora).
+> bootc's own output uses a standard UEFI bootchain. Apple Silicon Macs boot
+> through m1n1/Aura → U-Boot → GRUB, which gets written by the installer —
+> not by the disk image alone. For a physical install, use your native macOS
+> installer app ([aurora-silicon/aurora-installer](https://github.com/aurora-silicon/aurora-installer)
+> is the reference implementation) and feed it the raw disk image or payload
+> built from this image.
 
 ### Rebasing an existing system
 
@@ -174,9 +183,6 @@ Container build (macOS: `brew install podman just jq`):
 - [podman](https://docs.podman.io/en/latest) (+ a rootful `podman machine` for disk images)
 - [jq](https://jqlang.org)
 
-VM run on macOS:
-- qemu (`brew install qemu`)
-
 Linting:
 - shfmt
 - shellcheck
@@ -223,17 +229,17 @@ sudo bootc switch --transport containers-storage localhost/aurora-bazzite:latest
 
 See [man bootc switch](https://bootc.dev/bootc/man/bootc-switch.8.html).
 
-## Building and Running Virtual Machines and ISOs
+## Building Disk Images and ISOs
 
 Available types: `qcow2`, `raw`, `iso`.
 
-### `just build-qcow2` / `just rebuild-qcow2` / `just run-vm-qcow2`
+### `just build-raw` / `just build-qcow2` / `just build-iso`
 
-`run-vm-*` on macOS boots the disk with `qemu-system-aarch64` + `hvf` and EDK2 UEFI firmware; on Linux it uses the `qemux/qemu` container with KVM.
-
-### `just spawn-vm`
-
-`systemd-vmspawn` — Linux only.
+Runs bootc-image-builder inside the rootful podman machine on macOS (or
+rootful podman on Linux) and leaves the result in `output/<type>/`.
+`rebuild-*` variants rebuild the container image first. `raw` is the
+format to hand to the installer pipeline; `iso` produces an Anaconda
+installer ISO (useful for non-Apple-Silicon arm64 systems).
 
 ## File Management
 

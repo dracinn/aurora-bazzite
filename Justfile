@@ -9,9 +9,8 @@ export image_logo_url := env_var("IMAGE_LOGO_URL")
 export default_tag := env_var("DEFAULT_TAG")
 export bib_image := env_var("BIB_IMAGE")
 
-alias build-vm := build-qcow2
-alias rebuild-vm := rebuild-qcow2
-alias run-vm := run-vm-qcow2
+alias build-disk := build-qcow2
+alias rebuild-disk := rebuild-qcow2
 
 [private]
 default:
@@ -431,149 +430,29 @@ _build-bib $target_image $tag $type $config: _ensure-machine (_rootful_load_imag
 # Example: just _rebuild-bib localhost/fedora latest qcow2 disk_config/disk.toml
 _rebuild-bib $target_image $tag $type $config: (build target_image tag) && (_build-bib target_image tag type config)
 
-# Build a QCOW2 virtual machine image
-[group('Build Virtal Machine Image')]
+# Build a QCOW2 disk image
+[group('Build Disk Image')]
 build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "qcow2" "disk_config/disk.toml")
 
-# Build a RAW virtual machine image
-[group('Build Virtal Machine Image')]
+# Build a RAW disk image (the artifact an Apple Silicon install consumes)
+[group('Build Disk Image')]
 build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "raw" "disk_config/disk.toml")
 
-# Build an ISO virtual machine image
-[group('Build Virtal Machine Image')]
+# Build an ISO installer image
+[group('Build Disk Image')]
 build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "iso" "disk_config/iso.toml")
 
-# Rebuild a QCOW2 virtual machine image
-[group('Build Virtal Machine Image')]
+# Rebuild a QCOW2 disk image
+[group('Build Disk Image')]
 rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "qcow2" "disk_config/disk.toml")
 
-# Rebuild a RAW virtual machine image
-[group('Build Virtal Machine Image')]
+# Rebuild a RAW disk image
+[group('Build Disk Image')]
 rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "disk_config/disk.toml")
 
-# Rebuild an ISO virtual machine image
-[group('Build Virtal Machine Image')]
+# Rebuild an ISO installer image
+[group('Build Disk Image')]
 rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "iso" "disk_config/iso.toml")
-
-# Run a virtual machine with the specified image type and configuration
-# On macOS this uses qemu-system-aarch64 with Hypervisor.framework (brew
-# install qemu). On Linux it uses the qemux/qemu container like upstream.
-_run-vm $target_image $tag $type $config:
-    #!/usr/bin/env bash
-    set -eoux pipefail
-
-    # Determine the image file based on the type
-    image_file="output/${type}/disk.${type}"
-    if [[ $type == iso ]]; then
-        image_file="output/bootiso/install.iso"
-    fi
-
-    # Build the image if it does not exist
-    if [[ ! -f "${image_file}" ]]; then
-        just "build-${type}" "$target_image" "$tag"
-    fi
-
-    if [[ "$(uname)" == "Darwin" ]]; then
-        if ! command -v qemu-system-aarch64 &>/dev/null; then
-            echo "qemu not found. Install it with: brew install qemu" >&2
-            exit 1
-        fi
-        EDK2="$(brew --prefix)/share/qemu/edk2-aarch64-code.fd"
-        [[ -f "${EDK2}" ]] || EDK2="$(brew --prefix qemu)/share/qemu/edk2-aarch64-code.fd"
-        # Writable copy of the UEFI variable store, created once.
-        VARS="output/edk2-aarch64-vars.fd"
-        if [[ ! -f "${VARS}" ]]; then
-            cp "$(dirname "${EDK2}")/edk2-arm-vars.fd" "${VARS}"
-        fi
-
-        qemu_args=()
-        qemu_args+=(-machine virt,accel=hvf,highmem=on)
-        qemu_args+=(-cpu host -smp 4 -m 8192)
-        qemu_args+=(-drive "if=pflash,format=raw,file=${EDK2},readonly=on")
-        qemu_args+=(-drive "if=pflash,format=raw,file=${VARS}")
-        qemu_args+=(-device virtio-net-pci,netdev=n0)
-        qemu_args+=(-netdev "user,id=n0,hostfwd=tcp::2222-:22")
-        qemu_args+=(-device virtio-gpu-pci)
-        qemu_args+=(-device qemu-xhci -device usb-kbd -device usb-tablet)
-        case "${type}" in
-            iso)
-                qemu_args+=(-device virtio-scsi-pci)
-                qemu_args+=(-drive "file=${image_file},if=none,media=cdrom,id=cd0,readonly=on")
-                qemu_args+=(-device scsi-cd,drive=cd0)
-                ;;
-            raw)
-                qemu_args+=(-drive "file=${image_file},format=raw,if=virtio")
-                ;;
-            *)
-                qemu_args+=(-drive "file=${image_file},format=qcow2,if=virtio")
-                ;;
-        esac
-
-        echo "Booting ${image_file} (SSH forwarded to localhost:2222, Ctrl-A X to quit)"
-        exec qemu-system-aarch64 "${qemu_args[@]}"
-    fi
-
-    # Linux path: run QEMU inside a container with KVM.
-    # Determine an available port to use
-    port=8006
-    while grep -q :${port} <<< $(ss -tunalp); do
-        port=$(( port + 1 ))
-    done
-    echo "Using Port: ${port}"
-    echo "Connect to http://localhost:${port}"
-
-    # Set up the arguments for running the VM
-    run_args=()
-    run_args+=(--rm --privileged)
-    run_args+=(--pull=newer)
-    run_args+=(--publish "127.0.0.1:${port}:8006")
-    run_args+=(--env "CPU_CORES=4")
-    run_args+=(--env "RAM_SIZE=8G")
-    run_args+=(--env "DISK_SIZE=64G")
-    run_args+=(--env "TPM=Y")
-    run_args+=(--env "GPU=Y")
-    run_args+=(--device=/dev/kvm)
-    run_args+=(--volume "${PWD}/${image_file}":"/boot.${type}")
-    run_args+=(docker.io/qemux/qemu)
-
-    # Run the VM and open the browser to connect
-    (sleep 30 && xdg-open http://localhost:"$port") &
-    podman run "${run_args[@]}"
-
-# Run a virtual machine from a QCOW2 image
-[group('Run Virtal Machine')]
-run-vm-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "qcow2" "disk_config/disk.toml")
-
-# Run a virtual machine from a RAW image
-[group('Run Virtal Machine')]
-run-vm-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "raw" "disk_config/disk.toml")
-
-# Run a virtual machine from an ISO
-[group('Run Virtal Machine')]
-run-vm-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "iso" "disk_config/iso.toml")
-
-# Run a virtual machine using systemd-vmspawn (Linux only)
-[group('Run Virtal Machine')]
-spawn-vm rebuild="0" type="qcow2" ram="6G":
-    #!/usr/bin/env bash
-
-    set -euo pipefail
-
-    if [[ "$(uname)" == "Darwin" ]]; then
-        echo "systemd-vmspawn is Linux-only. Use 'just run-vm-qcow2' on macOS." >&2
-        exit 1
-    fi
-
-    [ "{{ rebuild }}" -eq 1 ] && echo "Rebuilding the ISO" && just build-vm {{ rebuild }} {{ type }}
-
-    systemd-vmspawn \
-      -M "bootc-image" \
-      --console=gui \
-      --cpus=2 \
-      --ram=$(echo {{ ram }}| numfmt --from=iec) \
-      --network-user-mode \
-      --vsock=false --pass-ssh-key=false \
-      -i ./output/**/*.{{ type }}
 
 # Runs shell check on all Bash scripts
 lint:

@@ -1,6 +1,6 @@
 # Disk image configuration for bootc-image-builder.
-# The produced qcow2/raw disk boots under any arm64 UEFI virtual machine
-# (QEMU, UTM, Tart, GNOME Boxes). See the README for the bare-metal caveat.
+# Produces the ESP + ext4 /boot + btrfs root layout an Apple Silicon
+# install consumes; the native installer writes the m1n1/Aura bootchain.
 
 [[customizations.filesystem]]
 mountpoint = "/"
