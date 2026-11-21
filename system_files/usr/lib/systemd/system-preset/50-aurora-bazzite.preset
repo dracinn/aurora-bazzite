@@ -1,0 +1,8 @@
+# bootc-image-builder's install-to-filesystem enables these at deploy time;
+# ship them as presets so `systemctl preset-all` is a no-op (the installer
+# bundle check requires the shipped state to equal the preset state).
+enable -.mount
+enable boot.mount
+enable boot-efi.mount
+enable sshd.service
+enable podman.socket

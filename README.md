@@ -102,26 +102,47 @@ Once pushed, go look at the Actions tab on your Github repository's page. The gr
 
 ```bash
 just build          # podman build, linux/arm64 OCI image
-just build-raw      # raw disk image via bootc-image-builder, in output/raw/disk.raw
+just build-raw      # raw disk image via bootc-image-builder, in output/image/disk.raw
 just build-qcow2    # same pipeline, qcow2 output
 ```
 
-`build-raw` produces `output/raw/disk.raw` with the standard layout (ESP +
-ext4 `/boot` + btrfs root). That is the artifact an Apple Silicon install
-consumes: write it with the installer, which supplies the m1n1/Aura →
-U-Boot bootchain on the ESP. The image itself ships `update-m1n1`,
-`uboot-aurora` and `aura` so Stage 2 and the DTBs stay maintained on the
-installed system.
+`build-raw` produces `output/image/disk.raw` with the standard layout (ESP +
+ext4 `/boot` + btrfs root) — the same partition layout the installer's
+filesystem bundle expects.
+
+```bash
+just bundle                 # → output/bundle/: image.json, boot.img, root.img,
+                            #   esp/, stage2.json (default profile fedora-minimal)
+just bundle "" "" fedora-kde   # choose the installer's profile name
+```
+
+`bundle` runs `installer/finalize-image` (vendored from
+[aurora-silicon/aurora-platform](https://github.com/aurora-silicon/aurora-platform),
+MIT) inside the podman machine: it builds the combined Stage 2 via
+`update-m1n1`, stages it on the ESP, seals firstboot state, hardens GRUB,
+rebuilds the initramfs with the `aurora-root` dracut module, and splits the
+disk into the bundle the installer consumes.
 
 ### Bare metal: use the Aurora installer
 
 > [!IMPORTANT]
-> bootc's own output uses a standard UEFI bootchain. Apple Silicon Macs boot
-> through m1n1/Aura → U-Boot → GRUB, which gets written by the installer —
-> not by the disk image alone. For a physical install, use your native macOS
-> installer app ([aurora-silicon/aurora-installer](https://github.com/aurora-silicon/aurora-installer)
-> is the reference implementation) and feed it the raw disk image or payload
-> built from this image.
+> The installer does not consume a raw disk or ISO directly. Each OS build
+> reaches it as a **payload**: `assemble-distribution-payload.py` (in
+> [aurora-silicon/aurora-installer](https://github.com/aurora-silicon/aurora-installer))
+> combines this filesystem bundle with a native Recovery app into the
+> profile zip + `installer-data` metadata + `delivery.json`, which
+> `aurora-distributions` then publishes as a signed catalog entry (payload
+> split into 1 GiB parts, everything bound by SHA-256 digests).
+> `bundle`'s `profile` argument must be one of the installer's known
+> profiles (`fedora-kde`, `fedora-gnome`, `fedora-minimal`) — pick whichever
+> matches the desktop you ship; a custom profile name requires forking the
+> payload schema.
+>
+> On real hardware the Mac boots m1n1/Aura → U-Boot → GRUB; the ESP files
+> the bundle carries (`m1n1/boot.bin`, `m1n1/boot-<board>.bin`,
+> `aurora/stage1.{bin,macho}`) are what make that work. The image itself
+> ships `update-m1n1`, `uboot-aurora` and `aura` so the bootchain stays
+> maintained after install.
 
 ### Rebasing an existing system
 

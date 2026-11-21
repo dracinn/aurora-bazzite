@@ -1,0 +1,152 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Seal a builder-owned raw image for the native Aurora installer.
+set -euo pipefail
+image=$(realpath "${1:?raw image required}")
+profile=${2:?installation profile required}
+output=$(realpath -m "${3:?new output directory required}")
+case $profile in fedora-kde|fedora-gnome|fedora-minimal) backend=dracut;; arch-kde|arch-gnome|arch-minimal) backend=mkinitcpio;; *) echo 'Unsupported image finalizer profile' >&2; exit 2;; esac
+[[ $(id -u) == 0 && $(uname -m) == aarch64 ]] || { echo 'Requires a disposable privileged native AArch64 builder' >&2; exit 2; }
+[[ -f $image && ! -L $image && ! -e $output ]] || exit 2
+mkdir -p "$output"
+scratch=$(mktemp -d)
+loop=''
+cleanup() {
+  local status=$?
+  trap - EXIT
+  local clean=1
+  for mount in dev proc sys run boot/efi boot ''; do
+    if mountpoint -q "$scratch/root${mount:+/$mount}"; then
+      umount -R "$scratch/root${mount:+/$mount}" || clean=0
+    fi
+  done
+  if (( clean == 1 )); then
+    [[ -z $loop ]] || losetup -d "$loop"
+    rm -rf "$scratch"
+  else
+    echo "Image mounts remain at $scratch; preserving them for recovery" >&2
+    status=1
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+# Upstream KIWI images are 4K-sector; bootc-image-builder raws are 512-sector.
+# The GPT header sits at LBA1, i.e. byte 512 or byte 4096 of the file.
+sector_size=512
+[[ $(dd if="$image" bs=1 skip=4096 count=8 status=none 2>/dev/null || true) == 'EFI PART' ]] && sector_size=4096
+loop=$(losetup --find --show --partscan --sector-size "$sector_size" "$image")
+udevadm settle
+[[ $(lsblk -dnro TYPE "$loop") == loop ]]
+[[ $(lsblk -nro TYPE "$loop" | grep -c '^part$') == 3 ]]
+for number in 1 2 3; do [[ -b ${loop}p$number ]]; done
+[[ $(blkid -s TYPE -o value "${loop}p1") == vfat ]]
+[[ $(blkid -s TYPE -o value "${loop}p2") == ext4 ]]
+[[ $(blkid -s TYPE -o value "${loop}p3") == btrfs ]]
+root_uuid=$(blkid -s UUID -o value "${loop}p3")
+boot_uuid=$(blkid -s UUID -o value "${loop}p2")
+efi_uuid=$(blkid -s UUID -o value "${loop}p1")
+mkdir -p "$scratch/root"
+mount -o subvol=root "${loop}p3" "$scratch/root"
+# A bootc disk keeps an ostree sysroot in the root subvolume; the deployable
+# rootfs is the deployment checkout. Bind it over the mount so the rest of
+# this script sees a plain rootfs.
+for deployment in "$scratch/root"/ostree/deploy/*/deploy/*.0; do
+  [[ -d $deployment ]] || continue
+  mount --bind "$deployment" "$scratch/root"
+  # A deployment's /root is a dangling var/roothome symlink until the runtime
+  # bind mounts land; dracut's inst /root needs the target to exist.
+  mkdir -p "$scratch/root/var/roothome" && chmod 0700 "$scratch/root/var/roothome"
+  break
+done
+mount "${loop}p2" "$scratch/root/boot"
+mount "${loop}p1" "$scratch/root/boot/efi"
+for path in dev proc sys run; do mkdir -p "$scratch/root/$path"; done
+mount --rbind /dev "$scratch/root/dev"
+mount -t proc proc "$scratch/root/proc"
+mount --rbind /sys "$scratch/root/sys"
+mount -t tmpfs tmpfs "$scratch/root/run"
+install -d -m 0755 "$scratch/root/etc/aurora" "$scratch/root/usr/lib/aurora"
+install -d -m 0700 "$scratch/root/var/lib/aurora/firstboot"
+printf 'format=1\nroot_uuid=%s\nboot_uuid=%s\nroot_subvolume=root\n' "$root_uuid" "$boot_uuid" > "$scratch/root/etc/aurora/image-layout"
+printf 'aurora-btrfs-v1\n' > "$scratch/root/usr/lib/aurora/image-format"
+touch "$scratch/root/var/lib/aurora/firstboot/pending"
+# Images carry no account, encryption key, machine identity or builder keyring.
+[[ ! -e $scratch/root/boot/omarchy/luks-key ]]
+[[ ! -e $scratch/root/var/lib/aurora/firstboot/luks-key ]]
+chroot "$scratch/root" systemctl enable aurora-firstboot.service
+# Aurora owns account setup on tty1; the generic base wizard must not compete.
+chroot "$scratch/root" systemctl mask systemd-firstboot.service
+# GRUB must never probe other disks or NVMe namespaces; see harden-grub.py.
+flavor=fedora
+[[ $backend == dracut ]] || flavor=arch
+python3 "$(dirname -- "${BASH_SOURCE[0]}")/harden-grub.py" "$scratch/root" --flavor "$flavor" \
+  --boot-uuid "$boot_uuid" --efi-uuid "$efi_uuid"
+if [[ $backend == dracut ]]; then
+  chroot "$scratch/root" systemctl disable initial-setup.service initial-setup-graphical.service 2>/dev/null || true
+  rm -f "$scratch/root/etc/reconfigSys"
+  # systemd applies every preset on the first boot, while / is still
+  # read-only, so the image must already be in its preset state.
+  presets=$(chroot "$scratch/root" systemctl preset-all 2>&1) || true
+  if grep -E '^(Created symlink|Removed) ' <<<"$presets" >&2; then
+    echo 'Unit states differ from their presets; the first boot cannot apply them' >&2
+    exit 1
+  fi
+  kernels=("$scratch/root/usr/lib/modules/"*)
+  (( ${#kernels[@]} == 1 ))
+  kernel=${kernels[0]##*/}
+  chroot "$scratch/root" dracut --force --no-hostonly --add 'aurora-root systemd-ask-password' "/boot/initramfs-$kernel.img" "$kernel"
+  chroot "$scratch/root" lsinitrd "/boot/initramfs-$kernel.img" > "$output/initramfs-inventory.txt"
+  grep -q 'aurora-initrd-root.service' "$output/initramfs-inventory.txt"
+  grep -q 'aurora/image-layout' "$output/initramfs-inventory.txt"
+  chroot "$scratch/root" /bin/bash -s -- / < "$(dirname -- "${BASH_SOURCE[0]}")/label-fedora-rootfs"
+else
+  chroot "$scratch/root" mkinitcpio -P
+  # Each installed Mac creates its own pacman master key; only public keyrings ship.
+  rm -rf "$scratch/root/etc/pacman.d/gnupg"
+fi
+# The ESP is formatted afresh by macOS; its volume_id is preserved in metadata.
+[[ -s $scratch/root/boot/efi/m1n1/boot.bin && -s $scratch/root/boot/efi/EFI/BOOT/BOOTAA64.EFI ]]
+cp -a "$scratch/root/boot/efi" "$output/esp"
+install -Dm644 "$scratch/root/usr/share/aura/stage1/aura-raw.bin" "$output/esp/aurora/stage1.bin"
+# The installer boots this Mach-O form of the same Stage 1 on M4 and later Macs.
+# Older aura packages do not ship it.
+stage1_macho=$scratch/root/usr/share/aura/stage1/aura-boot.macho
+if [[ -s $stage1_macho ]]; then
+  install -Dm644 "$stage1_macho" "$output/esp/aurora/stage1.macho"
+else
+  echo "Warning: no ${stage1_macho#"$scratch/root"} in the image; the ESP has no aurora/stage1.macho" >&2
+fi
+python3 "$(dirname -- "${BASH_SOURCE[0]}")/prepare-stage2.py" \
+  --combined "$output/esp/m1n1/boot.bin" \
+  --aura "$scratch/root/usr/lib/asahi-boot/m1n1.bin" \
+  --output "$output/esp/m1n1" --manifest "$output/stage2.json"
+cp "$scratch/root/etc/aurora/image-layout" "$output/image-layout"
+# A bootc deployment carries no fstab (the sysroot mounts via systemd units).
+if [[ -f $scratch/root/etc/fstab ]]; then cp "$scratch/root/etc/fstab" "$output/fstab"; else : > "$output/fstab"; fi
+if [[ $backend == dracut ]]; then
+  chroot "$scratch/root" rpm -qa --qf '%{NAME} %{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | sort > "$output/packages.txt"
+else
+  chroot "$scratch/root" pacman -Q > "$output/packages.txt"
+fi
+sync
+# Unmount the filesystems before copying their final byte identities.
+for path in dev proc sys run boot/efi boot ''; do
+  if mountpoint -q "$scratch/root${path:+/$path}"; then umount -R "$scratch/root${path:+/$path}"; fi
+done
+dd if="${loop}p2" of="$output/boot.img" bs=4M conv=sparse status=none
+dd if="${loop}p3" of="$output/root.img" bs=4M conv=sparse status=none
+python3 - "$output" "$profile" "$root_uuid" "$boot_uuid" "$efi_uuid" "$(blockdev --getsize64 "${loop}p1")" <<'PY'
+import hashlib,json,sys
+from pathlib import Path
+out=Path(sys.argv[1]); profile=sys.argv[2]
+images={}
+for name in ('boot.img','root.img'):
+ path=out/name
+ with path.open('rb') as stream: digest=hashlib.file_digest(stream,'sha256').hexdigest()
+ images[name]={'bytes':path.stat().st_size,'sha256':digest}
+(out/'image.json').write_text(json.dumps({'schema':1,'installation_profile':profile,
+ 'layout_kind':('fedora' if profile.startswith('fedora-') else 'alarm')+'-btrfs-v1',
+ 'root_uuid':sys.argv[3],'boot_uuid':sys.argv[4],'efi_uuid':sys.argv[5],
+ 'efi_volume_id':sys.argv[5].replace('-',''),'efi_bytes':int(sys.argv[6]),
+ 'root_subvolume':'root','home_subvolume':'home','images':images},indent=2)+'\n')
+PY

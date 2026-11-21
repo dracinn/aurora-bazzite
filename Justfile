@@ -446,6 +446,24 @@ rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_r
 [group('Build Disk Image')]
 rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "disk_config/disk.toml")
 
+# Seal disk.raw into an Aurora installer filesystem bundle (output/bundle)
+[group('Build Disk Image')]
+bundle $target_image=("localhost/" + image_name) $tag=default_tag profile="fedora-minimal":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ ! -f output/image/disk.raw ]]; then
+        just build-raw "{{ target_image }}" "{{ tag }}"
+    fi
+    repo="{{ justfile_directory() }}"
+    rm -rf output/bundle
+    podman machine ssh sudo podman run --rm --privileged \
+        -v /dev:/dev \
+        -v "'${repo}:/work'" --security-opt label=disable \
+        "{{ target_image }}:{{ tag }}" \
+        /work/scripts/make-installer-bundle.sh \
+        /work/output/image/disk.raw "{{ profile }}" /work/output/bundle
+    echo "Installer bundle written to output/bundle/"
+
 # Runs shell check on all Bash scripts
 lint:
     #!/usr/bin/env bash
