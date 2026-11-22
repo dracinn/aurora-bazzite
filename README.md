@@ -1,5 +1,7 @@
 # aurora-bazzite
 
+<p align="center"><img src="https://raw.githubusercontent.com/ublue-os/bazzite/main/press_kit/Bazzite_Color.svg" width="160" alt="Bazzite"></p>
+
 A template for building your own custom [bootc](https://github.com/bootc-dev/bootc) image for **Apple Silicon**, modeled on [ublue-os/image-template](https://github.com/ublue-os/image-template) and built on the [Aurora Silicon](https://github.com/aurora-silicon) hardware stack.
 
 The image is `linux/arm64` only. It starts from `quay.io/fedora/fedora-bootc:44`, replaces the kernel with `kernel-aurora`, and layers on Aurora's Apple Silicon packages (Mesa, firmware, audio, speaker protection, touch/camera stack) from the signed [Aurora RPM repository](https://aurorasilicon.org/fedora-aurora/44/testing/aarch64/). Universal Blue's own base images (Bazzite, Bluefin, Aurora) are x86_64-only, so they cannot be used here — hence Fedora's multiarch bootc base.
