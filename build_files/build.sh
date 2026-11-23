@@ -112,13 +112,10 @@ systemctl set-default graphical.target
 # a matching sysusers.d entry, so the sysusers lint stays satisfied.
 for spec in lp:7 printadmin:984; do
     name="${spec%%:*}" gid="${spec##*:}"
-    current="$(getent group "$name" | cut -d: -f3)"
-    if [[ "$current" != "$gid" ]]; then
-        if [[ -n "$current" ]]; then
-            groupmod -g "$gid" "$name"
-        else
-            groupadd -g "$gid" "$name"
-        fi
+    if grep -q "^${name}:" /etc/group; then
+        sed -i "s/^${name}:[^:]*:[0-9]*:/${name}:x:${gid}:/" /etc/group
+    else
+        echo "${name}:x:${gid}:" >> /etc/group
     fi
 done
 
