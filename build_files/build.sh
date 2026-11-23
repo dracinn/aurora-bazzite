@@ -110,8 +110,17 @@ systemctl set-default graphical.target
 # files owned by the /usr/lib/group statics lp and printadmin, which the
 # files nsswitch cannot resolve. Materialize both into /etc/group — each has
 # a matching sysusers.d entry, so the sysusers lint stays satisfied.
-groupadd -g 7 lp 2>/dev/null || getent group lp >/dev/null
-groupadd -g 984 printadmin 2>/dev/null || getent group printadmin >/dev/null
+for spec in lp:7 printadmin:984; do
+    name="${spec%%:*}" gid="${spec##*:}"
+    current="$(getent group "$name" | cut -d: -f3)"
+    if [[ "$current" != "$gid" ]]; then
+        if [[ -n "$current" ]]; then
+            groupmod -g "$gid" "$name"
+        else
+            groupadd -g "$gid" "$name"
+        fi
+    fi
+done
 
 # Use a COPR Example:
 #
