@@ -94,6 +94,18 @@ dnf5 install -y --allowerasing \
 # this installs a package from fedora repos
 dnf5 install -y tmux
 
+### KDE Plasma desktop (Bazzite-class)
+# Fedora's KDE environment group pulls kwin/mutter from the Aurora repo
+# (priority=1 forks patched for the Apple GPU). plasma-setup is Fedora's
+# first-boot wizard; aurora-remix-scripts retires its autologin after the
+# installer-created account signs in once.
+dnf5 install -y --allowerasing \
+    @kde-desktop-environment \
+    sddm \
+    plasma-setup
+systemctl enable sddm.service
+systemctl set-default graphical.target
+
 # Use a COPR Example:
 #
 # dnf5 -y copr enable ublue-os/staging
