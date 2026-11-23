@@ -105,6 +105,14 @@ dnf5 install -y --allowerasing \
     plasma-setup
 systemctl set-default graphical.target
 
+# bootc's var-tmpfiles lint resolves the owner of every file under /var via
+# /etc/group; cups (/var/spool/cups) and samba (/var/lib/samba/drivers) ship
+# files owned by the /usr/lib/group statics lp and printadmin, which the
+# files nsswitch cannot resolve. Materialize both into /etc/group — each has
+# a matching sysusers.d entry, so the sysusers lint stays satisfied.
+groupadd -g 7 lp
+groupadd -g 984 printadmin
+
 # Use a COPR Example:
 #
 # dnf5 -y copr enable ublue-os/staging
