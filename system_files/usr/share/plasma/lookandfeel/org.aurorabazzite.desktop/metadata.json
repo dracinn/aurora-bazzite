@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Id": "org.aurorabazzite.desktop",
+        "Name": "Aurora Bazzite",
+        "Description": "Aurora Bazzite look and feel",
+        "Icon": "preferences-desktop-plasma",
+        "Enabled": true
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

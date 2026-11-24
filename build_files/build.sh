@@ -105,6 +105,69 @@ dnf5 install -y --allowerasing \
     plasma-setup
 systemctl set-default graphical.target
 
+### Gaming stack (Bazzite-class)
+# Steam on Apple Silicon: Valve's native ARM64 client wrapped for the 4 KiB
+# page process tree (aurora-steam-native), with fex-emu registered as a Steam
+# compatibility tool so x86 Windows/Linux games run via Proton/FEX.
+# mesa-aurora-fex-guest supplies the x86_64/i686 guest graphics stack;
+# aurora-gamemode ships GameMode defaults that pin games to the P cores.
+dnf5 install -y --allowerasing \
+    steam \
+    aurora-steam-native \
+    fex-emu \
+    fex-emu-steam \
+    fex-emu-thunks \
+    mesa-aurora-fex-guest \
+    aurora-gamemode \
+    gamemode \
+    mangohud \
+    goverlay \
+    gamescope \
+    vkBasalt \
+    lutris \
+    corectrl \
+    distrobox \
+    just \
+    flatpak
+
+### Multimedia codecs
+# RPM Fusion carries the full ffmpeg (Fedora's ffmpeg-free is codec-limited)
+# plus the patent-encumbered gstreamer plugins.
+dnf5 install -y \
+    "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+    "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+dnf5 install -y --allowerasing \
+    ffmpeg \
+    gstreamer1-plugins-good \
+    gstreamer1-plugins-bad-free \
+    gstreamer1-plugins-ugly-free \
+    gstreamer1-plugin-openh264 \
+    openh264
+
+# Flathub remote for user flatpaks (Heroic, Discord, etc. — `ujust setup-flatpaks`)
+flatpak remote-add --if-not-exists --system flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo
+
+### Aurora Bazzite identity
+# Rebrand the os-release aurora-release installed; aurora-release itself stays
+# (it provides system-release and the hardware remix identity).
+sed -i \
+    -e 's|^NAME=.*|NAME="Aurora Bazzite"|' \
+    -e 's|^PRETTY_NAME=.*|PRETTY_NAME="Aurora Bazzite 44"|' \
+    -e 's|^VARIANT=.*|VARIANT="Aurora Bazzite (KDE Plasma)"|' \
+    -e 's|^VARIANT_ID=.*|VARIANT_ID=aurora-bazzite|' \
+    -e 's|^DEFAULT_HOSTNAME=.*|DEFAULT_HOSTNAME=aurora-bazzite|' \
+    -e 's|^LOGO=.*|LOGO=aurora-bazzite|' \
+    /usr/lib/os-release
+
+# Default look-and-feel: dark color scheme + Aurora Bazzite wallpaper for new
+# users (kde-settings may already pin a LookAndFeelPackage — override it).
+if [[ -f /etc/xdg/kdeglobals ]] && grep -q '^LookAndFeelPackage=' /etc/xdg/kdeglobals; then
+    sed -i 's|^LookAndFeelPackage=.*|LookAndFeelPackage=org.aurorabazzite.desktop|' /etc/xdg/kdeglobals
+else
+    printf '\n[KDE]\nLookAndFeelPackage=org.aurorabazzite.desktop\n' >> /etc/xdg/kdeglobals
+fi
+
 # bootc's var-tmpfiles lint resolves the owner of every file under /var via
 # /etc/group; cups (/var/spool/cups) and samba (/var/lib/samba/drivers) ship
 # files owned by the /usr/lib/group statics lp and printadmin, which the

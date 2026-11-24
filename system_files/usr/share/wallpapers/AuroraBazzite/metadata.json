@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Id": "AuroraBazzite",
+        "Name": "Aurora Bazzite",
+        "Description": "Aurora Bazzite default wallpaper",
+        "Enabled": true,
+        "Authors": [{ "Name": "Aurora Bazzite" }],
+        "License": "CC-BY-SA-4.0"
+    }
+}
