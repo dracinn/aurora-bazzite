@@ -130,6 +130,108 @@ dnf5 install -y --allowerasing \
     just \
     flatpak
 
+### Bazzite package set
+# Ported from ublue-os/bazzite's build spec (build_files/bazzite/*.sh), limited
+# to packages with aarch64 builds. Terra (etc/yum.repos.d/terra.repo, shipped
+# in system_files) carries the ublue-adjacent layer: umu-launcher, uupd,
+# ScopeBuddy, bazzite-updater/portal, cardwire, dmemcg-booster, topgrade,
+# starship, udev rule packs. Fedora supplies the rest.
+# Not available on aarch64 and therefore skipped: bazaar/krunner-bazaar
+# (Bazaar installed as a flatpak instead), steamdeck-kde-presets, greenboot,
+# scx-scheds, hhd, xwiimote-ng.
+dnf5 install -y --allowerasing \
+    umu-launcher \
+    umu-wrapper \
+    uupd \
+    bazzite-updater \
+    bazzite-portal \
+    ScopeBuddy \
+    cardwire \
+    cardwire-gui \
+    dmemcg-booster \
+    plasma-foreground-booster-dmemcg \
+    ls-iommu \
+    topgrade \
+    starship \
+    webapp-manager \
+    rom-properties \
+    rom-properties-kf6 \
+    game-devices-udev \
+    udev-joystick-blacklist-rm \
+    cicpoffs \
+    vulkan-low-latency-layer
+
+dnf5 install -y --allowerasing \
+    jq \
+    bees \
+    input-remapper \
+    waydroid \
+    ptyxis \
+    twitter-twemoji-fonts \
+    google-noto-sans-cjk-fonts \
+    lato-fonts \
+    fira-code-fonts \
+    snapper \
+    btrfs-assistant \
+    btrfsmaintenance \
+    cockpit-system \
+    cockpit-podman \
+    cockpit-storaged \
+    cockpit-files \
+    cockpit-networkmanager \
+    tailscale \
+    fish \
+    btop \
+    fastfetch \
+    glow \
+    gum \
+    xdg-terminal-exec \
+    linuxconsoletools \
+    v4l-utils \
+    ydotool \
+    msedit \
+    libcec \
+    openrgb \
+    python3-icoextract \
+    lshw \
+    xwininfo \
+    udica \
+    dbus-x11 \
+    xrandr \
+    evtest \
+    hidapi \
+    xdg-user-dirs \
+    openxr \
+    compsize \
+    i2c-tools \
+    lm_sensors \
+    iio-sensor-proxy \
+    stress-ng \
+    lsb_release \
+    kernel-tools \
+    sbsigntools \
+    ddcutil \
+    libddcutil \
+    7zip \
+    lzip \
+    libxcrypt-compat \
+    vulkan-tools \
+    tuned \
+    tuned-ppd \
+    ladspa-caps-plugins \
+    pipewire-module-filter-chain-sofa \
+    xdotool \
+    wmctrl \
+    yad \
+    f3 \
+    duf \
+    gnome-disk-utility \
+    oxygen-icon-theme \
+    unrar \
+    libvirt-daemon-kvm \
+    virt-manager \
+    edk2-aarch64
+
 ### Multimedia codecs
 # RPM Fusion carries the full ffmpeg (Fedora's ffmpeg-free is codec-limited)
 # plus the patent-encumbered gstreamer plugins.
@@ -148,32 +250,82 @@ dnf5 install -y --allowerasing \
 flatpak remote-add --if-not-exists --system flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
 
-### Aurora Bazzite identity
-# Rebrand the os-release aurora-release installed; aurora-release itself stays
-# (it provides system-release and the hardware remix identity).
+### Bazzite identity
+# Faithful port of upstream's image-info.sh: rewrite os-release as Bazzite and
+# stamp /usr/share/ublue-os/image-info.json, which the ported bazzite-* tools
+# (flatpak-manager, user-setup, ujust recipes) read at runtime.
+# aurora-release stays installed for system-release/the hardware remix bits.
 sed -i \
-    -e 's|^NAME=.*|NAME="Aurora Bazzite"|' \
-    -e 's|^PRETTY_NAME=.*|PRETTY_NAME="Aurora Bazzite 44"|' \
-    -e 's|^VARIANT=.*|VARIANT="Aurora Bazzite (KDE Plasma)"|' \
-    -e 's|^VARIANT_ID=.*|VARIANT_ID=aurora-bazzite|' \
-    -e 's|^DEFAULT_HOSTNAME=.*|DEFAULT_HOSTNAME=aurora-bazzite|' \
-    -e 's|^LOGO=.*|LOGO=aurora-bazzite|' \
+    -e 's|^NAME=.*|NAME="Bazzite"|' \
+    -e 's|^PRETTY_NAME=.*|PRETTY_NAME="Bazzite 44"|' \
+    -e 's|^VERSION=.*|VERSION="44 (Kinoite)"|' \
+    -e 's|^ID=.*|ID=bazzite\nID_LIKE="fedora"|' \
+    -e 's|^VARIANT=.*|VARIANT="Bazzite KDE"|' \
+    -e 's|^VARIANT_ID=.*|VARIANT_ID=bazzite|' \
+    -e 's|^DEFAULT_HOSTNAME=.*|DEFAULT_HOSTNAME=bazzite|' \
+    -e 's|^LOGO=.*|LOGO=bazzite-logo|' \
+    -e 's|^HOME_URL=.*|HOME_URL="https://bazzite.gg"|' \
+    -e 's|^ANSI_COLOR=.*|ANSI_COLOR="0;38;2;138;43;226"|' \
     /usr/lib/os-release
+grep -q '^ID_LIKE=' /usr/lib/os-release || \
+    sed -i 's|^ID=bazzite|ID=bazzite\nID_LIKE="fedora"|' /usr/lib/os-release
+echo "Bazzite release 44 (Forty Four)" > /etc/system-release
 
-# Default look-and-feel: dark color scheme + Aurora Bazzite wallpaper for new
-# users (kde-settings may already pin a LookAndFeelPackage — override it).
+mkdir -p /usr/share/ublue-os
+cat > /usr/share/ublue-os/image-info.json <<'EOF'
+{
+  "image-name": "bazzite",
+  "image-flavor": "main",
+  "image-vendor": "bazzite",
+  "image-ref": "ostree-image-signed:docker://ghcr.io/dracinn/aurora-bazzite",
+  "image-tag": "latest",
+  "image-branch": "stable",
+  "base-image-name": "kinoite",
+  "fedora-version": "44"
+}
+EOF
+
+# Default look-and-feel: dark color scheme + Bazzite convergence wallpaper for
+# new users (kde-settings may already pin a LookAndFeelPackage — override it).
 if [[ -f /etc/xdg/kdeglobals ]] && grep -q '^LookAndFeelPackage=' /etc/xdg/kdeglobals; then
-    sed -i 's|^LookAndFeelPackage=.*|LookAndFeelPackage=org.aurorabazzite.desktop|' /etc/xdg/kdeglobals
+    sed -i 's|^LookAndFeelPackage=.*|LookAndFeelPackage=org.bazzite.desktop|' /etc/xdg/kdeglobals
 else
-    printf '\n[KDE]\nLookAndFeelPackage=org.aurorabazzite.desktop\n' >> /etc/xdg/kdeglobals
+    printf '\n[KDE]\nLookAndFeelPackage=org.bazzite.desktop\n' >> /etc/xdg/kdeglobals
 fi
 
+# Upstream configure-kde: merge Bazzite's pinned-panel applets into the
+# plasma layout defaults (steamdeck-kde-presets is x86-only, so the LnF
+# package + pins carry the Bazzite look here).
+LAYOUT=/usr/share/plasma/shells/org.kde.plasma.desktop/contents/layout.js
+if [[ -f "$LAYOUT" ]]; then
+    cat /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/bazzite-pins.js >> "$LAYOUT"
+fi
+
+# Plymouth: spinner theme with the Bazzite watermark (watermark.png ships in
+# system_files); KDE carries plymouth already.
+if [[ -d /usr/share/plymouth/themes/spinner ]]; then
+    printf '[Daemon]\nTheme=spinner\n' > /etc/plymouth/plymouthd.conf
+fi
+
+# tuned default profile (Bazzite ships throughput-performance-bazzite on
+# desktops; balanced-bazzite is the laptop-friendly default for Macs).
+mkdir -p /etc/tuned
+echo balanced-bazzite > /etc/tuned/active_profile
+
+# Bazzite first-boot services (user services go to the global wants dir).
+systemctl enable \
+    bazzite-flatpak-manager.service \
+    bazzite-hardware-setup.service
+systemctl enable --global \
+    bazzite-user-setup.service \
+    bazzite-dynamic-fixes.service
+
 # bootc's var-tmpfiles lint resolves the owner of every file under /var via
-# /etc/group; cups (/var/spool/cups) and samba (/var/lib/samba/drivers) ship
-# files owned by the /usr/lib/group statics lp and printadmin, which the
-# files nsswitch cannot resolve. Materialize both into /etc/group — each has
-# a matching sysusers.d entry, so the sysusers lint stays satisfied.
-for spec in lp:7 printadmin:984; do
+# /etc/passwd and /etc/group; cups, samba and swtpm ship /var files owned by
+# the /usr/lib statics lp, printadmin and tss, which the files nsswitch
+# cannot resolve. Materialize all of them — each has a matching sysusers.d
+# entry, so the sysusers lint stays satisfied.
+for spec in lp:7 printadmin:984 tss:59; do
     name="${spec%%:*}" gid="${spec##*:}"
     if grep -q "^${name}:" /etc/group; then
         sed -i "s/^${name}:[^:]*:[0-9]*:/${name}:x:${gid}:/" /etc/group
@@ -181,6 +333,11 @@ for spec in lp:7 printadmin:984; do
         echo "${name}:x:${gid}:" >> /etc/group
     fi
 done
+if ! grep -q "^tss:" /etc/passwd; then
+    echo "tss:x:59:59:Account used for TPM access:/:/usr/sbin/nologin" >> /etc/passwd
+else
+    sed -i "s/^tss:[^:]*:[0-9]*:[0-9]*:/tss:x:59:59:/" /etc/passwd
+fi
 
 # Use a COPR Example:
 #
@@ -193,6 +350,15 @@ done
 # The kernel's initramfs was skipped during the transaction (see the
 # 05-rpmostree.install mask above), so generate it here with the ostree
 # module bootc needs. depmod runs first to be safe.
+#
+# Some package in the desktop/bazzite set pulls the stock Fedora kernel back
+# in as a dependency; a bootc image must carry exactly one kernel, so drop it
+# again before generating initramfs images.
+for pkg in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; do
+    if rpm -q "$pkg" &>/dev/null; then
+        dnf5 remove -y "$pkg"
+    fi
+done
 for module_dir in /usr/lib/modules/*/; do
     kver="$(basename "${module_dir}")"
     if [[ -f "${module_dir}/vmlinuz" && ! -f "${module_dir}/initramfs.img" ]]; then

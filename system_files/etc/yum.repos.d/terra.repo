@@ -1,0 +1,13 @@
+# Terra — Fyra Labs' community package repository (https://terra.fyralabs.com)
+# Carries the ublue-adjacent packages Bazzite layers on top of Fedora that are
+# built for aarch64: umu-launcher, uupd, ScopeBuddy, bazzite-updater,
+# bazzite-portal, cardwire, dmemcg-booster, topgrade, starship, ...
+[terra]
+name=Terra $releasever
+baseurl=https://repos.fyralabs.com/terra$releasever
+enabled=1
+type=rpm
+skip_if_unavailable=True
+repo_gpgcheck=0
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-terra

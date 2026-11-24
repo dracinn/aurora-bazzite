@@ -1,2 +1,3 @@
 #!/usr/bin/bash
-exec /usr/bin/just --justfile /usr/share/aurora-bazzite/justfile --working-directory . "$@"
+# ujust — Bazzite-style wrapper around just(1) backed by the ublue-os justfile
+exec /usr/bin/just --justfile /usr/share/ublue-os/justfile "$@"

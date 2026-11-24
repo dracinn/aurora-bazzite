@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Id": "org.bazzite.desktop",
+        "Name": "Bazzite",
+        "Description": "Bazzite look and feel",
+        "Icon": "preferences-desktop-plasma",
+        "Enabled": true
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

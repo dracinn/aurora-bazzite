@@ -2,288 +2,172 @@
 
 <p align="center"><img src="https://raw.githubusercontent.com/ublue-os/bazzite/main/press_kit/Bazzite_Color.svg" width="160" alt="Bazzite"></p>
 
-A template for building your own custom [bootc](https://github.com/bootc-dev/bootc) image for **Apple Silicon**, modeled on [ublue-os/image-template](https://github.com/ublue-os/image-template) and built on the [Aurora Silicon](https://github.com/aurora-silicon) hardware stack.
+[Bazzite](https://bazzite.gg) — the Universal Blue gaming OS — ported to **Apple Silicon**, built on Fedora 44 aarch64 and the [Aurora Silicon](https://github.com/aurora-silicon) hardware stack, delivered through the notarized Aurora Installer for macOS.
 
-The image is `linux/arm64` only. It starts from `quay.io/fedora/fedora-bootc:44`, replaces the kernel with `kernel-aurora`, and layers on Aurora's Apple Silicon packages (Mesa, firmware, audio, speaker protection, touch/camera stack) from the signed [Aurora RPM repository](https://aurorasilicon.org/fedora-aurora/44/testing/aarch64/). Universal Blue's own base images (Bazzite, Bluefin, Aurora) are x86_64-only, so they cannot be used here — hence Fedora's multiarch bootc base.
+Bazzite upstream (`ublue-os/bazzite`) and the ublue COPRs publish **x86_64 only**, so this is not a rebase: the build reproduces Bazzite's own spec — its os-release identity, `image-info.json`, `ujust` recipes, `bazzite-*` services and scripts, tuned profiles, branding, and flatpak seeding — on Fedora's multiarch bootc base, with the Terra repository (which does build aarch64) supplying the ublue-adjacent packages.
+
+## What's in the image
+
+### Aurora Silicon hardware layer (required to boot/function)
+
+- `kernel-aurora` (16 KiB pages) + `aurora-userpages` for per-process 4 KiB, with bootc kargs
+- `aurora-platform`, `aurora-firmware`, `aurora-wifi-firmware`, `avd-fw`
+- `mesa-aurora-dri-drivers` / `mesa-aurora-vulkan-drivers` (Apple GPU), `aurora-flatpak-gl`
+- Audio: `alsa-ucm-conf-aurora`, `aurora-audio`, `speakerguardd-v2`, `speakersafetyd-aurora-profiles`
+- `aurora-sep` (Touch ID sudo via authselect vendor profile), camera/keyboard, `upower` fork
+- Bootchain: `update-m1n1`, `uboot-aurora` — m1n1/Aura → U-Boot → GRUB stays maintained after install
+- Aurora repo at `priority=1` — its patched forks (kwin, mutter, pipewire, NetworkManager, fex-emu, steam) win when requested
+
+### Bazzite layer (faithful port, files vendored from upstream)
+
+- Identity: `NAME="Bazzite"` os-release, `VARIANT_ID=bazzite`, purple `ANSI_COLOR`, `bazzite-logo` icons, `/usr/share/ublue-os/image-info.json`
+- `ujust` → real Bazzite recipes (`/usr/share/ublue-os/just/*.just` + kinoite's `90-bazzite-de.just`)
+- `bazzite-steam`/`bazzite-steam-bpm`/`bazzite-steam-firstrun` wrappers, `bazzite-rollback-helper`
+- First-boot services: `bazzite-flatpak-manager`, `bazzite-hardware-setup`, `bazzite-user-setup`, `bazzite-dynamic-fixes` — plus their libexecs, polkit actions, MOTD, fastfetch config, bling
+- Bazzite wallpapers (`convergence`, `giants`, `penguins`, …), `org.bazzite.desktop` look-and-feel, panel pins (`bazzite-pins.js`), plymouth spinner watermark
+- Flatpak list seeded by the manager (Firefox, KDE apps, DistroShelf, Gear Lever, Flatseal, Warehouse, ProtonUp-Qt, MangoHud/vkBasalt/OBSVkCapture layers, OBS plugins, Bazaar)
+
+### Gaming stack
+
+- `steam` — Valve's native ARM64 client + `aurora-steam-native` (4 KiB-page wrapper)
+- `fex-emu` + `fex-emu-steam` + `fex-emu-thunks` — FEX registered as a Steam compatibility tool; x86 games via Proton/FEX, `mesa-aurora-fex-guest` gives guests real GPU acceleration
+- `fex-emu-rootfs-fedora`, `aurora-gamemode` (pins games to P-cores), `gamemode`
+- `mangohud`, `goverlay`, `gamescope`, `vkBasalt`, `lutris`, `corectrl`, `distrobox`
+
+### Bazzite package set (aarch64-available subset)
+
+- From **Terra**: `umu-launcher`, `umu-wrapper`, `uupd`, `bazzite-updater`, `bazzite-portal`, `ScopeBuddy`, `cardwire`, `dmemcg-booster` + `plasma-foreground-booster-dmemcg`, `ls-iommu`, `topgrade`, `starship`, `webapp-manager`, `rom-properties`, `game-devices-udev`, `udev-joystick-blacklist-rm`, `cicpoffs`, `vulkan-low-latency-layer`
+- From **Fedora**: `bees`, `input-remapper`, `waydroid`, `ptyxis`, `snapper` + `btrfs-assistant` + `btrfsmaintenance`, cockpit suite, `tailscale`, `fish`, `btop`, `fastfetch`, `ydotool`, `msedit`, `openrgb`, `tuned` + `tuned-ppd` (default profile `balanced-bazzite`), libvirt/qemu/virt-manager + `edk2-aarch64`, fonts, and the usual Bazzite CLI tooling
+- RPM Fusion ffmpeg (full codecs) + Flathub remote
+
+### Skipped (no aarch64 builds exist)
+
+`bazaar`/`krunner-bazaar` RPMs (Bazaar installs as a flatpak instead), `steamdeck-kde-presets`, `greenboot`, `scx-scheds`, `hhd`, `xwiimote-ng`, `ublue-os-just` (base justfile vendored instead), all Steam Deck firmware/dock packages.
 
 # Community
 
 - [Aurora Silicon Discord](https://discord.com/invite/DXmsSSc5aY) — Apple Silicon hardware stack, installer, kernel
-- [bootc discussion forums](https://github.com/bootc-dev/bootc/discussions) — bootc image and rebase questions
-- [Universal Blue Forums](https://universal-blue.discourse.group/) — the template this is based on
+- [Bazzite / Universal Blue Forums](https://universal-blue.discourse.group/) — upstream distribution this ports
+- [bootc discussion forums](https://github.com/bootc-dev/bootc/discussions) — image and rebase questions
 
-# How to Use
+# Building
 
-## Step 0: Prerequisites
-
-- A Github account
-- macOS on Apple Silicon (or any aarch64 Linux host). On macOS install:
-
-  ```bash
-  brew install podman just jq cosign
-  podman machine init --rootful --cpus 4 --memory 8192 --disk-size 60
-  podman machine start
-  ```
-
-  `just` creates/starts a rootful podman machine automatically if you skip
-  the `machine init` step. A rootful machine is required for the disk-image
-  recipes. The repository should live under your `$HOME` so the podman
-  machine can see it.
-
-- A Github Actions runner is not needed on your side — the included
-  workflow builds on GitHub's native arm64 runners (`ubuntu-26.04-arm`).
-
-## Step 1: Preparing the Template
-
-### Step 1a: Copying the Template
-
-Select `Use this Template` on this page. You can set the name and description of your repository to whatever you would like, but all other settings should be left untouched.
-
-Once you have finished copying the template, you need to enable the Github Actions workflows for your new repository.
-To enable the workflows, go to the `Actions` tab of the new repository and click the button to enable workflows.
-
-### Step 1b: Cloning the New Repository
-
-[GitHub Documentation](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository)
-
-Once you have the repository on your local drive, proceed to the next step.
-
-## Step 2: Initial Setup
-
-### Step 2a: Creating a Cosign Key
-
-Container signing is important for end-user security. By default the image builds *will fail* on the signing step if you skip this.
-
-With the [cosign CLI tool](https://edu.chainguard.dev/open-source/sigstore/cosign/how-to-install-cosign/) installed, run inside your repo folder:
+Prerequisites (macOS on Apple Silicon, or aarch64 Linux):
 
 ```bash
-COSIGN_PASSWORD="" cosign generate-key-pair
+brew install podman just jq cosign
 ```
 
-The signing key will be used in GitHub Actions and will not work if it is password protected.
-
-> [!WARNING]
-> Be careful to *never* accidentally commit `cosign.key` into your git repo. If this key goes out to the public, the security of your repository is compromised.
-
-Next, add the key to GitHub secrets:
-
-<details>
-    <summary>Using the Github Web Interface (preferred)</summary>
-
-Go to your repository settings, under `Secrets and Variables` -> `Actions`, add a new secret named `SIGNING_SECRET`, then paste the contents of `cosign.key` into the secret and save it (the `.key` file, not the `.pub` file).
-</details>
-<details>
-<summary>Using the Github CLI</summary>
+`just` creates/starts a rootful podman machine automatically; a rootful machine is required for the disk-image recipes.
 
 ```bash
-gh secret set SIGNING_SECRET < cosign.key
+just build          # podman build, linux/arm64 OCI image + bootc container lint
+just build-raw      # raw disk image via bootc-image-builder → output/image/disk.raw
 ```
-</details>
 
-### Step 2b: Choosing Your Base Image
+## Installing on a Mac (Aurora Installer path)
 
-The default base is `quay.io/fedora/fedora-bootc:44`, which is the release the Aurora RPM repository targets (`44/testing/aarch64`). If you switch to `fedora-bootc:45`, also switch the repo file in `system_files/etc/yum.repos.d/aurora.repo` to the matching `45/testing/aarch64` channel — the Aurora repository uses `$releasever`, so it follows automatically as long as a channel exists for that release.
-
-You may **not** use `ghcr.io/ublue-os/*` images as a base: they publish x86_64 manifests only.
-
-### Step 2c: Changing Names
-
-Change the `IMAGE_NAME` and `REPO_ORGANIZATION` variable inside `image-template.env`.
-
-To commit and push all the files changed and added in step 2 into your Github repository:
-```bash
-git add Containerfile image-template.env cosign.pub
-git commit -m "Initial Setup"
-git push
-```
-Once pushed, go look at the Actions tab on your Github repository's page. The green checkmark should be showing on the top commit, which means your new image is ready!
-
-## Step 3: Switch to Your Image
-
-### Disk images for the installer path
+The installer consumes a **payload**, not a raw disk:
 
 ```bash
-just build          # podman build, linux/arm64 OCI image
-just build-raw      # raw disk image via bootc-image-builder, in output/image/disk.raw
-just build-qcow2    # same pipeline, qcow2 output
+just bundle "" "" fedora-kde   # → output/bundle/ (profile name must be an installer profile)
+just payload                   # → output/payload/: <profile>-<date>.zip,
+                               #   installer-data-<profile>.json, delivery.json
 ```
-
-`build-raw` produces `output/image/disk.raw` with the standard layout (ESP +
-ext4 `/boot` + btrfs root) — the same partition layout the installer's
-filesystem bundle expects.
-
-```bash
-just bundle                 # → output/bundle/: image.json, boot.img, root.img,
-                            #   esp/, stage2.json (default profile fedora-minimal)
-just bundle "" "" fedora-kde   # choose the installer's profile name
-just payload                # → output/payload/: <profile>-<date>.zip,
-                            #   installer-data-<profile>.json, delivery.json
-```
-
-`payload` clones `aurora-installer` into `.aurora-installer/` (build-time
-tooling only), builds the native Recovery app template via SwiftPM with an
-ad-hoc signature, and runs `assemble-distribution-payload.py`, which
-digest-validates the bundle — every required board Stage 2, the Mach-O
-Stage 1, image checksums, and the Recovery app's Info.plist markers and
-inventory — before writing the zip. `AURORA_RECOVERY_TESTS=` can be set to
-re-enable the Recovery test fixtures, which crash on newer macOS.
 
 `bundle` runs `installer/finalize-image` (vendored from
-[aurora-silicon/aurora-platform](https://github.com/aurora-silicon/aurora-platform),
-MIT) inside the podman machine: it builds the combined Stage 2 via
-`update-m1n1`, stages it on the ESP, seals firstboot state, hardens GRUB,
-rebuilds the initramfs with the `aurora-root` dracut module, and splits the
-disk into the bundle the installer consumes.
+[aurora-silicon/aurora-platform](https://github.com/aurora-silicon/aurora-platform), MIT) inside the
+podman machine: combined Stage 2 via `update-m1n1`, staged on the ESP, sealed
+firstboot state, hardened GRUB, initramfs rebuilt with the `aurora-root` dracut
+module, then the disk is split into the installer's bundle format.
 
-### Bare metal: use the Aurora installer
+`payload` clones `aurora-installer` into `.aurora-installer/` (build-time
+tooling only), builds the Recovery app template via SwiftPM, and runs
+`assemble-distribution-payload.py`, which digest-validates the bundle before
+writing the zip. `aurora-distributions` then publishes it as a signed catalog
+entry bound by SHA-256 digests. `AURORA_RECOVERY_TESTS=` re-enables the
+Recovery test fixtures.
 
-> [!IMPORTANT]
-> The installer does not consume a raw disk or ISO directly. Each OS build
-> reaches it as a **payload**: `assemble-distribution-payload.py` (in
-> [aurora-silicon/aurora-installer](https://github.com/aurora-silicon/aurora-installer))
-> combines this filesystem bundle with a native Recovery app into the
-> profile zip + `installer-data` metadata + `delivery.json`, which
-> `aurora-distributions` then publishes as a signed catalog entry (payload
-> split into 1 GiB parts, everything bound by SHA-256 digests).
-> `bundle`'s `profile` argument must be one of the installer's known
-> profiles (`fedora-kde`, `fedora-gnome`, `fedora-minimal`) — pick whichever
-> matches the desktop you ship; a custom profile name requires forking the
-> payload schema.
->
-> On real hardware the Mac boots m1n1/Aura → U-Boot → GRUB; the ESP files
-> the bundle carries (`m1n1/boot.bin`, `m1n1/boot-<board>.bin`,
-> `aurora/stage1.{bin,macho}`) are what make that work. The image itself
-> ships `update-m1n1`, `uboot-aurora` and `aura` so the bootchain stays
-> maintained after install.
+The profile must be one of the installer's known profiles (`fedora-kde`,
+`fedora-gnome`, `fedora-minimal`) — a custom name requires forking the payload
+schema.
 
-### Rebasing an existing system
-
-From an aarch64 system already running a bootc image, you can rebase:
+## Rebasing an existing system
 
 ```bash
-sudo bootc switch ghcr.io/<username>/<image_name>
+sudo bootc switch ghcr.io/dracinn/aurora-bazzite:latest
+sudo systemctl reboot
 ```
 
-On an existing Aurora/Asahi Fedora install this is **experimental**: this
-image ships `kernel-aurora`, `update-m1n1` and `uboot-aurora`, but the
-switch has not been qualified the way the installer path is. Keep a working
-deployment to roll back to (`bootc rollback`).
+On an existing Aurora/Asahi Fedora install this is **experimental**: the image
+ships `kernel-aurora`, `update-m1n1` and `uboot-aurora`, but the switch path
+has not been qualified the way the installer path is. Keep a working
+deployment to roll back to (`bootc rollback`). On a system installed via the
+Aurora Installer, `sudo bootc upgrade` tracks `latest`.
 
 # Repository Contents
 
 ## Containerfile
 
-The [Containerfile](./Containerfile) defines the base image and calls `build.sh`. Works like a regular podman Containerfile; see the [Podman Documentation](https://docs.podman.io/en/latest/Introduction.html).
+[Containerfile](./Containerfile) builds `linux/arm64` from
+`quay.io/fedora/fedora-bootc:44` — the release the Aurora `44/testing/aarch64`
+repo channel targets (`aurora.repo` uses `$releasever`). Runs
+`build_files/build.sh`, then `bootc container lint`.
 
-## build.sh
+## build_files/build.sh
 
-[build.sh](./build_files/build.sh) is where the Apple Silicon customization happens:
+[build.sh](./build_files/build.sh), in order:
 
-1. Copies `system_files/` into the image — the Aurora repo file, its RPM signing key, and bootc kernel arguments (`user4k=on` + Aurora's quiet boot set).
-2. Removes the stock Fedora kernel and installs `kernel-aurora` (16K pages, `aurora-userpages` for per-process 4K).
-3. Installs the hardware stack from the [Aurora repository](https://aurorasilicon.org/fedora-aurora/44/testing/aarch64/): `aurora-platform`, `aurora-firmware`, `avd-fw`, `mesa-aurora-*`, audio (`alsa-ucm-conf-aurora`, `aurora-audio`, `speakerguardd-v2`, `speakersafetyd-aurora-profiles`), `aurora-sep`, camera/keyboard, `update-m1n1`/`uboot-aurora`.
-4. Installs the Aurora release identity (`aurora-release`, `aurora-repos`, `aurora-logos`) — remove that block for a plain Fedora identity.
-5. Regenerates the initramfs if the kernel transaction did not produce one, then `bootc container lint` validates the image.
+1. Copies `system_files/` into the image — Aurora + Terra repo files and signing keys, bootc kargs, and the vendored Bazzite tree (see below)
+2. Removes the stock Fedora kernel, installs `kernel-aurora` (masking the `05-rpmostree.install` dracut hook for the transaction)
+3. Installs the Aurora hardware stack (`--allowerasing` so its forks replace stock mesa/upower/…)
+4. `aurora-release`/`aurora-repos`/`aurora-logos`/`aurora-remix-scripts` — supplies `system-release` and keeps the hardware repo configured
+5. KDE Plasma (`@kde-desktop-environment` + `plasma-setup` first-boot wizard, `plasmalogin`)
+6. Gaming stack (steam/FEX/mangohud/gamescope/lutris/…)
+7. Bazzite package set from Terra + Fedora
+8. RPM Fusion codecs + Flathub remote
+9. Bazzite identity: os-release rewrite, `image-info.json`, `org.bazzite.desktop` LnF, panel pins, plymouth, `balanced-bazzite` tuned profile, service enables
+10. Re-removes the stock kernel (a package-set dep pulls it back), regenerates initramfs with the `ostree` dracut module
+11. Materializes the `lp`/`printadmin` static groups into `/etc/group` so the bootc var-tmpfiles lint can resolve `/var` ownership
+12. Rebuilds the authselect vendor profile for Touch ID
 
-Add your own packages/services at the marked spot in the file.
+## system_files/
 
-## build.yml
+| Path | Source / purpose |
+|---|---|
+| `etc/yum.repos.d/aurora.repo`, `etc/pki/rpm-gpg/RPM-GPG-KEY-aurora` | Aurora repo + key (fingerprint `D6C974933C41AACE00AE3C4591B639B8C6A77AC1`, recorded upstream in `fedora-aurora/keys/fingerprint.txt`) |
+| `etc/yum.repos.d/terra.repo`, `etc/pki/rpm-gpg/RPM-GPG-KEY-terra` | Terra 44 repo + key (`AE09157A4DE88B497EA1D5D300CDAB43DE226D6F`) |
+| `usr/lib/bootc/kargs.d/10-aurora.toml` | `user4k=on` + Aurora quiet-boot kargs |
+| `usr/bin/{ujust,bazzite-steam*,bazzite-rollback-helper}` | Bazzite wrappers; `ujust` execs `just --justfile /usr/share/ublue-os/justfile` |
+| `usr/libexec/{bazzite-*,hwsupport,ublue-motd,uupd-update,waydroid-*}` | Bazzite first-boot/helper scripts |
+| `usr/lib/systemd/{system,user}/bazzite-*.service` | flatpak-manager, hardware-setup, user-setup, dynamic-fixes |
+| `usr/lib/tuned/profiles/*-bazzite` | `balanced`/`powersave`/`throughput-performance` (+ `-battery`) tuned profiles |
+| `usr/share/ublue-os/` | justfile + `just/*.just` recipes, `bazzite/` assets (fastfetch config, MOTD, firefox-config, flatpak list, eol list), homebrew Brewfiles |
+| `usr/share/wallpapers/` | Bazzite wallpaper set |
+| `usr/share/plasma/lookandfeel/org.bazzite.desktop` | BreezeDark + convergence wallpaper for new users |
+| `usr/share/plasma/shells/.../updates/bazzite-pins.js` | pinned-taskbar applets, appended to `layout.js` at build |
+| `usr/share/icons/hicolor/**` | `bazzite-logo`/`bazzite-logo-icon`/distributor-logo |
+| `usr/share/plymouth/themes/spinner/watermark.png` | boot-splash watermark |
+| `etc/skel/.config/autostart/` | `steam.desktop` (`bazzite-steam -silent`), `bazzite-portal.desktop` |
+| `etc/xdg/autostart/bazzite-announcement.desktop` | Bazzite welcome/news |
+| `etc/profile.d/bazzite-neofetch.sh`, `usr/share/{bazzite-cli,fish}` | shell bling |
 
-The [build.yml](./.github/workflows/build.yml) workflow builds the image on a native arm64 runner (`ubuntu-26.04-arm`), rechunks it, pushes to GHCR and signs it with cosign.
+## Workflows
 
-## The Aurora RPM repository
+- [build.yml](./.github/workflows/build.yml) — builds on a native arm64 runner (`ubuntu-26.04-arm`), rechunks, pushes to GHCR, cosign-signs. Requires the `SIGNING_SECRET` repository secret (`cosign.key`).
+- [build-disk.yml](./.github/workflows/build-disk.yml) — `bootc-image-builder` disk images (qcow2/raw) for the installer path; optional S3 upload via rclone secrets.
 
-`system_files/etc/yum.repos.d/` ships Aurora's repo file and override verbatim from `aurora-silicon/fedora-aurora` (`aurora-repos` package). The public signing key is at `system_files/etc/pki/rpm-gpg/RPM-GPG-KEY-aurora`; its fingerprint `D6C974933C41AACE00AE3C4591B639B8C6A77AC1` is independently recorded in [keys/fingerprint.txt](https://github.com/aurora-silicon/fedora-aurora/blob/main/keys/fingerprint.txt). The repository has `priority=1`, so packages Aurora replaces (upower, libfprint, NetworkManager, pipewire, mutter, kwin, fex-emu, steam) come from Aurora's forks when installed.
+## Installer tooling
 
-# Building Disk Images
+`installer/` — vendored pieces of the Aurora installer pipeline (`finalize-image`, `harden-grub.py`); `scripts/` — bundle/payload assembly and qualification (`make-installer-bundle.sh`, `assemble-payload.sh`, `check-bundle.sh`); `disk_config/` — bootc-image-builder customizations.
 
-[build-disk.yml](./.github/workflows/build-disk.yml) runs `bootc-image-builder` on the arm64 runner and produces `qcow2` and `raw` disk images for the installer path. No ISO is built: on Apple Silicon the install goes through the native Aurora installer, not Anaconda.
+## artifacthub-repo.yml
 
-Disk images upload to a job artifact, or to S3 via rclone with these repository secrets: `S3_PROVIDER`, `S3_BUCKET_NAME`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_ENDPOINT`. See [rclone's provider list](https://rclone.org/s3/).
+Optional [artifacthub.io](https://artifacthub.io) indexing — fill in your repository ID and owners.
 
-# Artifacthub
+# Acknowledgements
 
-`artifacthub-repo.yml` indexes your image on [artifacthub.io](https://artifacthub.io). Fill in your repository ID and owners.
-
-# Justfile Documentation
-
-The `Justfile` builds and manages the container image and VM disk images, and is also used inside Github Actions. On macOS, podman commands run inside `podman machine`; recipes that need the rootful store (`build-qcow2`, `ostree-rechunk`, …) transparently `podman save | podman machine ssh sudo podman load` and run inside the machine.
-
-## Required Utilities
-
-Container build (macOS: `brew install podman just jq`):
-- [just](https://just.systems/man/en/introduction.html)
-- [podman](https://docs.podman.io/en/latest) (+ a rootful `podman machine` for disk images)
-- [jq](https://jqlang.org)
-
-Linting:
-- shfmt
-- shellcheck
-
-## Environment Variables
-
-Sourced from `image-template.env`:
-
-- `IMAGE_NAME`: image name (default: "aurora-bazzite")
-- `DEFAULT_TAG`: image tag (default: "latest")
-- `BIB_IMAGE`: Bootc Image Builder image (default: "quay.io/centos-bootc/bootc-image-builder:latest")
-
-## Building The Image
-
-### `just build`
-
-```bash
-just build $target_image $tag
-```
-
-Always passes `--platform linux/arm64`. On Apple Silicon podman machines this is native; on x86 Linux, podman falls back to `qemu-user-static`.
-
-### Rechunking
-
-Rechunks layers for better delta/resumable updates:
-
-- `just ostree-rechunk` — [rpm-ostree](https://coreos.github.io/rpm-ostree/build-chunked-oci/) (on macOS runs inside the podman machine)
-- `just rechunk` — [chunkah](https://github.com/coreos/chunkah)
-
-### Switching to the locally built image for testing
-
-The image must be in the root-owned containers-storage to rebase. On Linux, `sudo just build` skips the transfer; on macOS, copy it over:
-
-```bash
-podman save localhost/aurora-bazzite:latest | podman machine ssh sudo podman load
-```
-
-On a Linux host running bootc:
-
-```bash
-sudo podman image list --filter=label=containers.bootc=1
-sudo bootc switch --transport containers-storage localhost/aurora-bazzite:latest
-```
-
-See [man bootc switch](https://bootc.dev/bootc/man/bootc-switch.8.html).
-
-## Building Disk Images
-
-Available types: `qcow2`, `raw`.
-
-### `just build-raw` / `just build-qcow2` (alias `just build-disk`)
-
-Runs bootc-image-builder inside the rootful podman machine on macOS (or
-rootful podman on Linux) and leaves the result in `output/<type>/`.
-`rebuild-*` variants rebuild the container image first. `raw` is the
-artifact the Aurora installer consumes.
-
-## File Management
-
-- `just check` / `just fix` — Justfile syntax
-- `just clean` — remove build artifacts
-- `just lint` — shellcheck all scripts
-- `just format` — shfmt all scripts
-
-## References
-
-- [aurora-silicon/fedora-aurora](https://github.com/aurora-silicon/fedora-aurora) — RPM specs, signing keys, KIWI image producer, repo feed
-- [aurora-silicon/aurora-installer](https://github.com/aurora-silicon/aurora-installer) — native macOS installer app
-- [aurora-silicon](https://github.com/aurora-silicon) — kernel (`linux`), bootloader (`aura`), Mesa, NixOS/ALARM variants
-- [ublue-os/image-template](https://github.com/ublue-os/image-template) — the upstream template this mirrors
-- [bootc](https://github.com/bootc-dev/bootc) — image-based OS tooling
+- [ublue-os/bazzite](https://github.com/ublue-os/bazzite) — the distribution and spec this image ports (`system_files` vendored under their license)
+- [Aurora Silicon](https://github.com/aurora-silicon) — kernel, hardware enablement, installer, signing infrastructure
+- [ublue-os/image-template](https://github.com/ublue-os/image-template) — repository skeleton, Justfile, and CI workflows
+- [Fyra Labs / Terra](https://terra.fyralabs.com) — the ublue-adjacent packages built for aarch64

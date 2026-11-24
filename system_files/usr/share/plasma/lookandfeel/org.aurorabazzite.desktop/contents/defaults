@@ -1,5 +1,0 @@
-[kdeglobals][General]
-ColorScheme=BreezeDark
-
-[plasma-org.kde.plasma.desktop-appletsrc][Containments][1][Wallpaper][org.kde.image][General]
-Image=/usr/share/wallpapers/AuroraBazzite

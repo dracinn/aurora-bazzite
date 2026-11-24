@@ -6,9 +6,10 @@ COPY system_files /system_files
 # Base Image
 #
 # Universal Blue images (bazzite, aurora, bluefin) are x86_64-only, so this
-# template builds on Fedora's multiarch bootc base instead. aarch64 is the
-# only supported architecture: the Aurora Silicon hardware stack layered on
-# top in build_files/build.sh targets Apple Silicon Macs.
+# port reproduces Bazzite's build spec on Fedora's multiarch bootc base
+# instead of rebasing. aarch64 is the only supported architecture: the
+# Aurora Silicon hardware stack layered on in build_files/build.sh targets
+# Apple Silicon Macs.
 FROM quay.io/fedora/fedora-bootc:44
 ## Other possible base images include:
 # FROM quay.io/fedora/fedora-bootc:45           # Fedora 45 (Aurora testing channel exists)
