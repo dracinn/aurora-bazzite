@@ -105,6 +105,25 @@ has not been qualified the way the installer path is. Keep a working
 deployment to roll back to (`bootc rollback`). On a system installed via the
 Aurora Installer, `sudo bootc upgrade` tracks `latest`.
 
+## Converting a traditional Aurora Remix install (aurora-rebase.sh)
+
+`scripts/aurora-rebase.sh` converts a running **Fedora Aurora Remix**
+(traditional dnf) install into this atomic image in place — the same approach
+as [ublue-os/bazzite#2155](https://github.com/ublue-os/bazzite/pull/2155)'s
+`asahi-rebase.sh`, pointed at Aurora instead of Asahi. It does not touch the
+m1n1 → U-Boot → GRUB boot chain:
+
+```bash
+bash scripts/aurora-rebase.sh
+```
+
+It initializes an ostree stateroot on the existing root partition, pulls the
+published image (~10 GB), deploys it with the preserved `rootflags` plus the
+required `user4k=on` karg, injects your `/boot`/`/boot/efi` fstab entries and
+a login account into the deployment, then regenerates GRUB. Reboot lands
+directly in aurora-bazzite; the original Fedora BLS entries stay in the GRUB
+menu as a fallback. Safe to re-run after a failure.
+
 # Repository Contents
 
 ## Containerfile
